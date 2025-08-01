@@ -19,6 +19,8 @@ flutter:
         pluginClass: FFmpegKitFlutterPlugin
       macos:
         pluginClass: FFmpegKitFlutterPlugin
+      windows:
+        pluginClass: FFmpegKitFlutterPlugin
 
 dependencies:
   ffmpeg_kit_flutter_platform_interface: ^0.2.1

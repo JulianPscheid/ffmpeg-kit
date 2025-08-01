@@ -26,13 +26,13 @@ enum class SessionType {
     MEDIA_INFORMATION = 3
 };
 
-enum class LogLevel {
+enum class LogLevel : int {
     TRACE = 56,
     DEBUG = 48,
     VERBOSE = 40,
     INFO = 32,
     WARNING = 24,
-    ERROR = 16,
+    ERROR_LEVEL = 16,
     FATAL = 8,
     PANIC = 0
 };

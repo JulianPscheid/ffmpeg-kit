@@ -218,12 +218,12 @@ void SessionManager::ExecuteSessionAsync(int64_t sessionId) {
         try {
             ExecuteFFmpegCommand(session);
         } catch (const std::exception& e) {
-            session->AddLog(LogLevel::ERROR, "Exception during async execution: " + std::string(e.what()));
+            session->AddLog(LogLevel::ERROR_LEVEL, "Exception during async execution: " + std::string(e.what()));
             session->SetState(SessionState::FAILED);
             session->SetReturnCode(-1);
             session->SetEndTime();
         } catch (...) {
-            session->AddLog(LogLevel::ERROR, "Unknown exception during async execution");
+            session->AddLog(LogLevel::ERROR_LEVEL, "Unknown exception during async execution");
             session->SetState(SessionState::FAILED);
             session->SetReturnCode(-1);
             session->SetEndTime();
@@ -263,7 +263,7 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
     // Build command line
     std::string ffmpegPath = FindFFmpegExecutable();
     if (ffmpegPath.empty()) {
-        session->AddLog(LogLevel::ERROR, "FFmpeg executable not found");
+        session->AddLog(LogLevel::ERROR_LEVEL, "FFmpeg executable not found");
         session->SetState(SessionState::FAILED);
         session->SetReturnCode(-1);
         session->SetEndTime();
@@ -297,7 +297,7 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
     
     // Create stdout pipe
     if (!CreatePipe(&hStdoutRead, &hStdoutWrite, &sa, 0)) {
-        session->AddLog(LogLevel::ERROR, "Failed to create stdout pipe");
+        session->AddLog(LogLevel::ERROR_LEVEL, "Failed to create stdout pipe");
         session->SetState(SessionState::FAILED);
         session->SetReturnCode(-1);
         session->SetEndTime();
@@ -306,7 +306,7 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
     
     // Create stderr pipe
     if (!CreatePipe(&hStderrRead, &hStderrWrite, &sa, 0)) {
-        session->AddLog(LogLevel::ERROR, "Failed to create stderr pipe");
+        session->AddLog(LogLevel::ERROR_LEVEL, "Failed to create stderr pipe");
         CloseHandle(hStdoutRead);
         CloseHandle(hStdoutWrite);
         session->SetState(SessionState::FAILED);
@@ -352,7 +352,7 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
     
     if (!success) {
         DWORD error = GetLastError();
-        session->AddLog(LogLevel::ERROR, "Failed to create FFmpeg process. Error: " + std::to_string(error));
+        session->AddLog(LogLevel::ERROR_LEVEL, "Failed to create FFmpeg process. Error: " + std::to_string(error));
         session->SetState(SessionState::FAILED);
         session->SetReturnCode(-1);
         session->SetEndTime();
@@ -436,7 +436,7 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
         session->AddLog(LogLevel::INFO, "Session completed successfully");
         session->SetState(SessionState::COMPLETED);
     } else {
-        session->AddLog(LogLevel::ERROR, "Session failed with exit code: " + std::to_string(exitCode));
+        session->AddLog(LogLevel::ERROR_LEVEL, "Session failed with exit code: " + std::to_string(exitCode));
         session->SetState(SessionState::FAILED);
     }
     

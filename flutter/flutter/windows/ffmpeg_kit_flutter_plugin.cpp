@@ -393,5 +393,5 @@ int64_t FFmpegKitFlutterPlugin::ExtractSessionIdFromMap(const flutter::Encodable
 void FFmpegKitFlutterPluginCApiRegisterWithRegistrar(
     FlutterDesktopPluginRegistrarRef registrar) {
   ffmpeg_kit_flutter::FFmpegKitFlutterPlugin::RegisterWithRegistrar(
-      flutter::PluginRegistrarWindows::GetFromRegistrar(registrar));
+      flutter::PluginRegistrarWindows::FromRef(registrar));
 }

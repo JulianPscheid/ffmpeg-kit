@@ -390,6 +390,8 @@ int64_t FFmpegKitFlutterPlugin::ExtractSessionIdFromMap(const flutter::Encodable
 
 }  // namespace ffmpeg_kit_flutter
 
+extern "C" {
+
 void FFmpegKitFlutterPluginCApiRegisterWithRegistrar(
     FlutterDesktopPluginRegistrarRef registrar) {
   auto registrar_windows = 
@@ -403,3 +405,5 @@ void FFmpegKitFlutterPluginRegisterWithRegistrar(
       reinterpret_cast<flutter::PluginRegistrarWindows*>(registrar);
   ffmpeg_kit_flutter::FFmpegKitFlutterPlugin::RegisterWithRegistrar(registrar_windows);
 }
+
+}  // extern "C"

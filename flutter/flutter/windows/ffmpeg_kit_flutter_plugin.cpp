@@ -396,3 +396,10 @@ void FFmpegKitFlutterPluginCApiRegisterWithRegistrar(
       reinterpret_cast<flutter::PluginRegistrarWindows*>(registrar);
   ffmpeg_kit_flutter::FFmpegKitFlutterPlugin::RegisterWithRegistrar(registrar_windows);
 }
+
+void FFmpegKitFlutterPluginRegisterWithRegistrar(
+    FlutterDesktopPluginRegistrarRef registrar) {
+  auto registrar_windows = 
+      reinterpret_cast<flutter::PluginRegistrarWindows*>(registrar);
+  ffmpeg_kit_flutter::FFmpegKitFlutterPlugin::RegisterWithRegistrar(registrar_windows);
+}

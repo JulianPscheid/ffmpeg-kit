@@ -9,7 +9,6 @@
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
-#include <flutter/plugin_registrar_manager.h>
 #include <flutter/standard_method_codec.h>
 #include <flutter/encodable_value.h>
 
@@ -393,7 +392,7 @@ int64_t FFmpegKitFlutterPlugin::ExtractSessionIdFromMap(const flutter::Encodable
 
 void FFmpegKitFlutterPluginCApiRegisterWithRegistrar(
     FlutterDesktopPluginRegistrarRef registrar) {
-  ffmpeg_kit_flutter::FFmpegKitFlutterPlugin::RegisterWithRegistrar(
-      flutter::PluginRegistrarManager::GetInstance()
-          ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar));
+  auto registrar_windows = 
+      reinterpret_cast<flutter::PluginRegistrarWindows*>(registrar);
+  ffmpeg_kit_flutter::FFmpegKitFlutterPlugin::RegisterWithRegistrar(registrar_windows);
 }

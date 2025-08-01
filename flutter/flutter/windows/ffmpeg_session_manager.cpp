@@ -410,6 +410,7 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
     
     // Wait for process completion
     DWORD waitResult = WaitForSingleObject(pi.hProcess, INFINITE);
+    (void)waitResult; // Suppress unused variable warning
     
     // Signal output threads to stop and wait for them
     outputComplete.store(true);

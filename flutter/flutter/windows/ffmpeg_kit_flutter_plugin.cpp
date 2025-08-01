@@ -10,6 +10,7 @@
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
+#include <flutter/encodable_value.h>
 
 #include <memory>
 #include <sstream>
@@ -55,7 +56,7 @@ void FFmpegKitFlutterPlugin::HandleMethodCall(
       result->Success(flutter::EncodableValue("x86_64"));
     }
     else if (method_name == "getLogLevel") {
-      result->Success(flutter::EncodableValue(static_cast<int>(LogLevel::INFO)));
+      result->Success(flutter::EncodableValue(static_cast<int>(ffmpeg_kit_flutter::LogLevel::INFO)));
     }
     else if (method_name == "setLogLevel") {
       result->Success(flutter::EncodableValue());
@@ -131,7 +132,7 @@ void FFmpegKitFlutterPlugin::HandleFFmpegSession(const flutter::EncodableMap* ar
   }
 
   auto args = ExtractArgumentsFromMap(arguments);
-  auto session = SessionManager::GetInstance().CreateSession(args, SessionType::FFMPEG);
+  auto session = SessionManager::GetInstance().CreateSession(args, ffmpeg_kit_flutter::SessionType::FFMPEG);
   result->Success(session->ToEncodableValue());
 }
 
@@ -143,7 +144,7 @@ void FFmpegKitFlutterPlugin::HandleFFprobeSession(const flutter::EncodableMap* a
   }
 
   auto args = ExtractArgumentsFromMap(arguments);
-  auto session = SessionManager::GetInstance().CreateSession(args, SessionType::FFPROBE);
+  auto session = SessionManager::GetInstance().CreateSession(args, ffmpeg_kit_flutter::SessionType::FFPROBE);
   result->Success(session->ToEncodableValue());
 }
 
@@ -155,7 +156,7 @@ void FFmpegKitFlutterPlugin::HandleMediaInformationSession(const flutter::Encoda
   }
 
   auto args = ExtractArgumentsFromMap(arguments);
-  auto session = SessionManager::GetInstance().CreateSession(args, SessionType::MEDIA_INFORMATION);
+  auto session = SessionManager::GetInstance().CreateSession(args, ffmpeg_kit_flutter::SessionType::MEDIA_INFORMATION);
   result->Success(session->ToEncodableValue());
 }
 
@@ -295,7 +296,7 @@ void FFmpegKitFlutterPlugin::HandleGetStatistics(const flutter::EncodableMap* ar
     return;
   }
 
-  if (session->GetType() != SessionType::FFMPEG) {
+  if (session->GetType() != ffmpeg_kit_flutter::SessionType::FFMPEG) {
     result->Success(flutter::EncodableValue(flutter::EncodableList())); // Empty list for non-FFmpeg sessions
     return;
   }

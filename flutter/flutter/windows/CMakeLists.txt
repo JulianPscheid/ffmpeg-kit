@@ -25,6 +25,7 @@ list(APPEND PLUGIN_SOURCES
 add_library(${PLUGIN_NAME} SHARED
   "include/ffmpeg_kit_flutter/ffmpeg_kit_flutter_plugin_c_api.h"
   "ffmpeg_kit_flutter_plugin.cpp"
+  "ffmpeg_session_manager.cpp"
 )
 
 # Apply a standard set of build settings that are configured in the

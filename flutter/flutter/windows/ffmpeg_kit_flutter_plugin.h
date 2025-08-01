@@ -3,6 +3,7 @@
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
+#include <flutter/encodable_value.h>
 
 #include <memory>
 

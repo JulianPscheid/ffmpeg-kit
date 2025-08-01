@@ -16,6 +16,8 @@ set(PLUGIN_NAME "ffmpeg_kit_flutter_plugin")
 list(APPEND PLUGIN_SOURCES
   "ffmpeg_kit_flutter_plugin.cpp"
   "ffmpeg_kit_flutter_plugin.h"
+  "ffmpeg_session_manager.cpp"
+  "ffmpeg_session_manager.h"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment

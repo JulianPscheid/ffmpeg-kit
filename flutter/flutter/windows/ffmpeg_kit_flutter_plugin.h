@@ -25,6 +25,44 @@ class FFmpegKitFlutterPlugin : public flutter::Plugin {
   void HandleMethodCall(
       const flutter::MethodCall<flutter::EncodableValue> &method_call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // Session creation handlers
+  void HandleFFmpegSession(const flutter::EncodableMap* arguments,
+                          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleFFprobeSession(const flutter::EncodableMap* arguments,
+                           std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleMediaInformationSession(const flutter::EncodableMap* arguments,
+                                    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // Session execution handlers
+  void HandleSessionExecute(const flutter::EncodableMap* arguments,
+                           std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleAsyncSessionExecute(const flutter::EncodableMap* arguments,
+                                std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // Session state handlers
+  void HandleGetSessionState(const flutter::EncodableMap* arguments,
+                            std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleGetReturnCode(const flutter::EncodableMap* arguments,
+                          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleGetLogs(const flutter::EncodableMap* arguments,
+                    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleGetAllLogs(const flutter::EncodableMap* arguments,
+                       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleGetFailStackTrace(const flutter::EncodableMap* arguments,
+                              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // Statistics handler
+  void HandleGetStatistics(const flutter::EncodableMap* arguments,
+                          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // Session control handlers
+  void HandleCancelSession(const flutter::EncodableMap* arguments,
+                          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // Helper methods
+  std::vector<std::string> ExtractArgumentsFromMap(const flutter::EncodableMap* arguments);
+  int64_t ExtractSessionIdFromMap(const flutter::EncodableMap* arguments);
 };
 
 }  // namespace ffmpeg_kit_flutter

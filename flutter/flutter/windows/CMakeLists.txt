@@ -15,7 +15,6 @@ set(PLUGIN_NAME "ffmpeg_kit_flutter_plugin")
 # Any new source files that you add to the plugin should be added here.
 list(APPEND PLUGIN_SOURCES
   "ffmpeg_kit_flutter_plugin.cpp"
-  "ffmpeg_kit_flutter_plugin.h"
   "ffmpeg_session_manager.cpp"
   "ffmpeg_session_manager.h"
 )
@@ -24,8 +23,11 @@ list(APPEND PLUGIN_SOURCES
 # on PLUGIN_NAME above).
 add_library(${PLUGIN_NAME} SHARED
   "include/ffmpeg_kit_flutter/ffmpeg_kit_flutter_plugin_c_api.h"
+  "include/ffmpeg_kit_flutter/ffmpeg_kit_flutter_plugin.h"
+  "include/ffmpeg_kit_flutter/f_fmpeg_kit_flutter_plugin.h"
   "ffmpeg_kit_flutter_plugin.cpp"
   "ffmpeg_session_manager.cpp"
+  "ffmpeg_session_manager.h"
 )
 
 # Apply a standard set of build settings that are configured in the

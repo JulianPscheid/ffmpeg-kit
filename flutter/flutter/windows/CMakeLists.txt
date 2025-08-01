@@ -41,6 +41,10 @@ set_target_properties(${PLUGIN_NAME} PROPERTIES
   CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
 
+# Use module definition file for explicit exports
+set_target_properties(${PLUGIN_NAME} PROPERTIES
+  LINK_FLAGS "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg_kit_flutter_plugin.def")
+
 # Source include directories and library dependencies. Add any plugin-specific
 # dependencies here.
 target_include_directories(${PLUGIN_NAME} INTERFACE

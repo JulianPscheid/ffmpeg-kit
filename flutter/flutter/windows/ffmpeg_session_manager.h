@@ -47,7 +47,8 @@ struct LogEntry {
         return flutter::EncodableValue(flutter::EncodableMap{
             {"sessionId", flutter::EncodableValue(sessionId)},
             {"level", flutter::EncodableValue(static_cast<int>(level))},
-            {"message", flutter::EncodableValue(message)}
+            {"message", flutter::EncodableValue(message)},
+            {"timestamp", flutter::EncodableValue(timestamp)}
         });
     }
 };
@@ -114,7 +115,7 @@ public:
     bool IsCancelled() const { return cancelled_; }
 
     // Async execution support
-    void SetProcessHandle(HANDLE handle) { processHandle_ = handle; }
+    void SetProcessHandle(HANDLE processHandle, HANDLE threadHandle);
     HANDLE GetProcessHandle() const { return processHandle_; }
 
 private:
@@ -135,7 +136,10 @@ private:
     mutable std::mutex statsMutex_;
     std::vector<StatisticsEntry> statistics_;
     
+    // Process management
     HANDLE processHandle_;
+    HANDLE threadHandle_;
+    mutable std::mutex processMutex_;
 
     int64_t GetCurrentTimeMillis() const;
     std::string ArgumentsToCommand(const std::vector<std::string>& args) const;

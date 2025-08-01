@@ -13,6 +13,7 @@
 
 #include <memory>
 #include <sstream>
+#include <algorithm>
 
 namespace ffmpeg_kit_flutter {
 
@@ -337,10 +338,31 @@ std::vector<std::string> FFmpegKitFlutterPlugin::ExtractArgumentsFromMap(const f
       for (const auto& arg : *argsList) {
         const auto* argStr = std::get_if<std::string>(&arg);
         if (argStr) {
-          result.push_back(*argStr);
+          // Basic input validation
+          if (argStr->length() > 32768) { // Max argument length
+            continue; // Skip overly long arguments
+          }
+          
+          // Check for potentially dangerous characters/patterns
+          std::string safeArg = *argStr;
+          
+          // Remove null bytes
+          safeArg.erase(std::remove(safeArg.begin(), safeArg.end(), '\0'), safeArg.end());
+          
+          // Skip empty arguments
+          if (safeArg.empty()) {
+            continue;
+          }
+          
+          result.push_back(safeArg);
         }
       }
     }
+  }
+  
+  // Limit total number of arguments
+  if (result.size() > 1000) {
+    result.resize(1000);
   }
   
   return result;

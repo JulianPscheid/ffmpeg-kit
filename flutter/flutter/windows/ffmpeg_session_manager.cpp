@@ -20,23 +20,46 @@ FFmpegSession::FFmpegSession(int64_t sessionId, const std::vector<std::string>& 
     , endTime_(0)
     , cancelled_(false)
     , processHandle_(nullptr)
+    , threadHandle_(nullptr)
 {
 }
 
 FFmpegSession::~FFmpegSession() {
+    std::lock_guard<std::mutex> lock(processMutex_);
+    
     if (processHandle_ && processHandle_ != INVALID_HANDLE_VALUE) {
         CloseHandle(processHandle_);
+        processHandle_ = nullptr;
+    }
+    
+    if (threadHandle_ && threadHandle_ != INVALID_HANDLE_VALUE) {
+        CloseHandle(threadHandle_);
+        threadHandle_ = nullptr;
     }
 }
 
 flutter::EncodableValue FFmpegSession::ToEncodableValue() const {
-    return flutter::EncodableValue(flutter::EncodableMap{
+    flutter::EncodableMap sessionMap{
         {"sessionId", flutter::EncodableValue(sessionId_)},
         {"createTime", flutter::EncodableValue(createTime_)},
-        {"startTime", flutter::EncodableValue(startTime_)},
         {"command", flutter::EncodableValue(command_)},
         {"type", flutter::EncodableValue(static_cast<int>(type_))}
-    });
+    };
+    
+    // Handle null values for startTime and endTime when not set
+    if (startTime_ > 0) {
+        sessionMap["startTime"] = flutter::EncodableValue(startTime_);
+    } else {
+        sessionMap["startTime"] = flutter::EncodableValue(); // null
+    }
+    
+    if (endTime_ > 0) {
+        sessionMap["endTime"] = flutter::EncodableValue(endTime_);
+    } else {
+        sessionMap["endTime"] = flutter::EncodableValue(); // null
+    }
+    
+    return flutter::EncodableValue(sessionMap);
 }
 
 void FFmpegSession::AddLog(LogLevel level, const std::string& message) {
@@ -100,10 +123,27 @@ void FFmpegSession::SetEndTime() {
     endTime_ = GetCurrentTimeMillis();
 }
 
+void FFmpegSession::SetProcessHandle(HANDLE processHandle, HANDLE threadHandle) {
+    std::lock_guard<std::mutex> lock(processMutex_);
+    processHandle_ = processHandle;
+    threadHandle_ = threadHandle;
+}
+
 void FFmpegSession::Cancel() {
     cancelled_ = true;
+    
+    std::lock_guard<std::mutex> lock(processMutex_);
     if (processHandle_ && processHandle_ != INVALID_HANDLE_VALUE) {
+        // First try to terminate gracefully
         TerminateProcess(processHandle_, 1);
+        
+        // Wait up to 5 seconds for process to terminate
+        DWORD waitResult = WaitForSingleObject(processHandle_, 5000);
+        if (waitResult == WAIT_TIMEOUT) {
+            // Force kill if still running
+            TerminateProcess(processHandle_, 9);
+            WaitForSingleObject(processHandle_, 1000);
+        }
     }
 }
 
@@ -172,9 +212,22 @@ void SessionManager::ExecuteSessionAsync(int64_t sessionId) {
         return;
     }
     
-    // Execute in a separate thread
+    // Execute in a separate thread with proper resource management
+    // Use a shared_ptr to ensure the session stays alive during execution
     std::thread([this, session]() {
-        ExecuteFFmpegCommand(session);
+        try {
+            ExecuteFFmpegCommand(session);
+        } catch (const std::exception& e) {
+            session->AddLog(LogLevel::ERROR, "Exception during async execution: " + std::string(e.what()));
+            session->SetState(SessionState::FAILED);
+            session->SetReturnCode(-1);
+            session->SetEndTime();
+        } catch (...) {
+            session->AddLog(LogLevel::ERROR, "Unknown exception during async execution");
+            session->SetState(SessionState::FAILED);
+            session->SetReturnCode(-1);
+            session->SetEndTime();
+        }
     }).detach();
 }
 
@@ -233,32 +286,47 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
     
     session->AddLog(LogLevel::DEBUG, "Command: " + cmdLine.str());
     
-    // Create process
-    STARTUPINFOA si = {0};
-    PROCESS_INFORMATION pi = {0};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESTDHANDLES;
-    
-    // Create pipes for stdout/stderr capture
-    HANDLE hStdoutRead, hStdoutWrite;
-    HANDLE hStderrRead, hStderrWrite;
+    // Create pipes for stdout/stderr capture with proper cleanup
+    HANDLE hStdoutRead = nullptr, hStdoutWrite = nullptr;
+    HANDLE hStderrRead = nullptr, hStderrWrite = nullptr;
     
     SECURITY_ATTRIBUTES sa;
     sa.nLength = sizeof(SECURITY_ATTRIBUTES);
     sa.bInheritHandle = TRUE;
-    sa.lpSecurityDescriptor = NULL;
+    sa.lpSecurityDescriptor = nullptr;
     
-    if (!CreatePipe(&hStdoutRead, &hStdoutWrite, &sa, 0) ||
-        !CreatePipe(&hStderrRead, &hStderrWrite, &sa, 0)) {
-        session->AddLog(LogLevel::ERROR, "Failed to create pipes for process output");
+    // Create stdout pipe
+    if (!CreatePipe(&hStdoutRead, &hStdoutWrite, &sa, 0)) {
+        session->AddLog(LogLevel::ERROR, "Failed to create stdout pipe");
         session->SetState(SessionState::FAILED);
         session->SetReturnCode(-1);
         session->SetEndTime();
         return -1;
     }
     
+    // Create stderr pipe
+    if (!CreatePipe(&hStderrRead, &hStderrWrite, &sa, 0)) {
+        session->AddLog(LogLevel::ERROR, "Failed to create stderr pipe");
+        CloseHandle(hStdoutRead);
+        CloseHandle(hStdoutWrite);
+        session->SetState(SessionState::FAILED);
+        session->SetReturnCode(-1);
+        session->SetEndTime();
+        return -1;
+    }
+    
+    // Make sure the read ends of the pipes are not inherited
+    SetHandleInformation(hStdoutRead, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(hStderrRead, HANDLE_FLAG_INHERIT, 0);
+    
+    // Create process
+    STARTUPINFOA si = {0};
+    PROCESS_INFORMATION pi = {0};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES;
     si.hStdOutput = hStdoutWrite;
     si.hStdError = hStderrWrite;
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
     
     // Convert command to mutable string for CreateProcessA
     std::string cmdStr = cmdLine.str();
@@ -266,18 +334,19 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
     cmdBuffer.push_back('\0');
     
     BOOL success = CreateProcessA(
-        NULL,                       // lpApplicationName
+        nullptr,                    // lpApplicationName
         cmdBuffer.data(),           // lpCommandLine
-        NULL,                       // lpProcessAttributes
-        NULL,                       // lpThreadAttributes
+        nullptr,                    // lpProcessAttributes
+        nullptr,                    // lpThreadAttributes
         TRUE,                       // bInheritHandles
-        CREATE_NO_WINDOW,           // dwCreationFlags
-        NULL,                       // lpEnvironment
-        NULL,                       // lpCurrentDirectory
+        CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP, // dwCreationFlags
+        nullptr,                    // lpEnvironment
+        nullptr,                    // lpCurrentDirectory
         &si,                        // lpStartupInfo
         &pi                         // lpProcessInformation
     );
     
+    // Close write ends of pipes (child process owns them now)
     CloseHandle(hStdoutWrite);
     CloseHandle(hStderrWrite);
     
@@ -293,27 +362,48 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
         return -1;
     }
     
-    session->SetProcessHandle(pi.hProcess);
+    // Store process handles
+    session->SetProcessHandle(pi.hProcess, pi.hThread);
     
-    // Read output in separate threads
-    std::thread stdoutThread([session, hStdoutRead]() {
+    // Create shared state for output reading threads
+    std::atomic<bool> outputComplete{false};
+    std::mutex outputMutex;
+    
+    // Read output in separate threads with timeout handling
+    std::thread stdoutThread([session, hStdoutRead, &outputComplete, &outputMutex]() {
         char buffer[4096];
         DWORD bytesRead;
-        while (ReadFile(hStdoutRead, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
-            buffer[bytesRead] = '\0';
-            std::string output(buffer);
-            session->AddLog(LogLevel::INFO, output);
+        while (!outputComplete.load() && ReadFile(hStdoutRead, buffer, sizeof(buffer) - 1, &bytesRead, nullptr)) {
+            if (bytesRead > 0) {
+                buffer[bytesRead] = '\0';
+                std::string output(buffer);
+                // Remove newlines and empty messages
+                if (!output.empty() && output != "\n" && output != "\r\n") {
+                    std::lock_guard<std::mutex> lock(outputMutex);
+                    session->AddLog(LogLevel::INFO, output);
+                }
+            } else {
+                break;
+            }
         }
         CloseHandle(hStdoutRead);
     });
     
-    std::thread stderrThread([session, hStderrRead]() {
+    std::thread stderrThread([session, hStderrRead, &outputComplete, &outputMutex]() {
         char buffer[4096];
         DWORD bytesRead;
-        while (ReadFile(hStderrRead, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
-            buffer[bytesRead] = '\0';
-            std::string output(buffer);
-            session->AddLog(LogLevel::WARNING, output);
+        while (!outputComplete.load() && ReadFile(hStderrRead, buffer, sizeof(buffer) - 1, &bytesRead, nullptr)) {
+            if (bytesRead > 0) {
+                buffer[bytesRead] = '\0';
+                std::string output(buffer);
+                // Remove newlines and empty messages
+                if (!output.empty() && output != "\n" && output != "\r\n") {
+                    std::lock_guard<std::mutex> lock(outputMutex);
+                    session->AddLog(LogLevel::WARNING, output);
+                }
+            } else {
+                break;
+            }
         }
         CloseHandle(hStderrRead);
     });
@@ -321,15 +411,19 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
     // Wait for process completion
     DWORD waitResult = WaitForSingleObject(pi.hProcess, INFINITE);
     
+    // Signal output threads to stop and wait for them
+    outputComplete.store(true);
+    
+    // Give threads a chance to finish reading
+    if (stdoutThread.joinable()) {
+        stdoutThread.join();
+    }
+    if (stderrThread.joinable()) {
+        stderrThread.join();
+    }
+    
     DWORD exitCode = 0;
     GetExitCodeProcess(pi.hProcess, &exitCode);
-    
-    // Wait for output threads to complete
-    stdoutThread.join();
-    stderrThread.join();
-    
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
     
     // Update session state
     session->SetReturnCode(static_cast<int>(exitCode));
@@ -350,18 +444,14 @@ int SessionManager::ExecuteFFmpegCommand(std::shared_ptr<FFmpegSession> session)
 }
 
 std::string SessionManager::FindFFmpegExecutable() {
-    // First, try to find ffmpeg.exe in the same directory as the DLLs
-    // This would be bundled with the Flutter app
-    
-    // Get the current module path
-    char modulePath[MAX_PATH];
-    HMODULE hModule = GetModuleHandleA("ffmpeg_kit_flutter_plugin.dll");
-    if (hModule && GetModuleFileNameA(hModule, modulePath, MAX_PATH)) {
-        std::string moduleDir(modulePath);
-        size_t lastSlash = moduleDir.find_last_of("\\/");
+    // Method 1: Try to find ffmpeg.exe in the same directory as the current executable
+    char exePath[MAX_PATH];
+    if (GetModuleFileNameA(nullptr, exePath, MAX_PATH)) {
+        std::string exeDir(exePath);
+        size_t lastSlash = exeDir.find_last_of("\\/");
         if (lastSlash != std::string::npos) {
-            moduleDir = moduleDir.substr(0, lastSlash + 1);
-            std::string ffmpegPath = moduleDir + "ffmpeg.exe";
+            exeDir = exeDir.substr(0, lastSlash + 1);
+            std::string ffmpegPath = exeDir + "ffmpeg.exe";
             
             // Check if file exists
             DWORD attributes = GetFileAttributesA(ffmpegPath.c_str());
@@ -371,8 +461,42 @@ std::string SessionManager::FindFFmpegExecutable() {
         }
     }
     
-    // Fallback: try to find ffmpeg in system PATH
-    return "ffmpeg"; // Let CreateProcess search in PATH
+    // Method 2: Try to find ffmpeg.exe in the plugin DLL directory
+    char modulePath[MAX_PATH];
+    HMODULE hModule = GetModuleHandleA(nullptr); // Get main executable handle first
+    if (hModule) {
+        // Try to get plugin DLL handle by enumerating modules
+        HMODULE hPluginModule = GetModuleHandleA("ffmpeg_kit_flutter_plugin.dll");
+        if (!hPluginModule) {
+            // Try alternative names
+            hPluginModule = GetModuleHandleA("libffmpeg_kit_flutter_plugin.dll");
+        }
+        
+        if (hPluginModule && GetModuleFileNameA(hPluginModule, modulePath, MAX_PATH)) {
+            std::string moduleDir(modulePath);
+            size_t lastSlash = moduleDir.find_last_of("\\/");
+            if (lastSlash != std::string::npos) {
+                moduleDir = moduleDir.substr(0, lastSlash + 1);
+                std::string ffmpegPath = moduleDir + "ffmpeg.exe";
+                
+                // Check if file exists
+                DWORD attributes = GetFileAttributesA(ffmpegPath.c_str());
+                if (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                    return ffmpegPath;
+                }
+            }
+        }
+    }
+    
+    // Method 3: Check if ffmpeg is available in system PATH
+    char pathBuffer[MAX_PATH];
+    DWORD result = SearchPathA(nullptr, "ffmpeg", ".exe", MAX_PATH, pathBuffer, nullptr);
+    if (result > 0 && result < MAX_PATH) {
+        return std::string(pathBuffer);
+    }
+    
+    // Fallback: return just "ffmpeg" and let CreateProcess search in PATH
+    return "ffmpeg";
 }
 
 } // namespace ffmpeg_kit_flutter
